@@ -28,3 +28,13 @@ jobs:
 
       - name: Run API tests
         run: python -m pytest day10/test_api.py -q
+
+  docker-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t scientific-agentic-rag:ci .
