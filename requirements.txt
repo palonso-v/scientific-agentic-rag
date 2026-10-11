@@ -1,0 +1,10 @@
+openai
+python-dotenv
+pydantic
+numpy
+tiktoken
+pymupdf
+fastapi
+pytest
+httpx
+uvicorn[standard]
