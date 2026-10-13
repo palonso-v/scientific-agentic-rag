@@ -2,8 +2,8 @@
 import json
 from pathlib import Path
 
-from day06.literature_assistant import answer_question
-from day09.eval_cases import EVAL_CASES
+from app.rag import answer_question
+from evals.rag_cases import EVAL_CASES
 
 
 def evaluate_case(case):

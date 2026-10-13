@@ -16,6 +16,4 @@ __pycache__/
 *.npz
 *.pdf
 *.log
-day06/index/
-day06/index_v2/
-day06/extracted/
+data/

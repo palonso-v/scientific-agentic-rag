@@ -6,7 +6,7 @@ import time
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from day06.literature_assistant import answer_question
+from app.rag import answer_question
 
 import json
 import uuid

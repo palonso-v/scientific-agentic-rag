@@ -1,5 +1,5 @@
-from day06.search_collection import search, ensure_collection_loaded
-from day08.rerank import search_with_reranking
+from app.retrieval import search, ensure_collection_loaded
+from app.rerank import search_with_reranking
 
 from shared.openai_client import client
 

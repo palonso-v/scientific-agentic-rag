@@ -27,7 +27,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run API tests
-        run: python -m pytest day10/test_api.py -q
+        run: python -m pytest tests/ -q
 
   docker-build:
     runs-on: ubuntu-latest

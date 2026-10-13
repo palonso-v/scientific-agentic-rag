@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 
-from day12.planner import ExecutionPlan, create_plan
+from app.planner import ExecutionPlan, create_plan
 
-from day06.literature_assistant import answer_question
+from app.rag import answer_question
 
 from typing import Literal
 
