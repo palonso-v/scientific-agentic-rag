@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel, Field
-from day06.search_collection import search, client
+from app.retrieval import search, client
 
 import time
 

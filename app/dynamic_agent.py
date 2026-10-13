@@ -4,8 +4,8 @@ from pydantic import BaseModel
 
 from shared.openai_client import client
 
-from day06.literature_assistant import answer_question
-from day12.workflow import (
+from app.rag import answer_question
+from app.workflow import (
     extract_calculation,
     calculate,
     synthesize_answer,

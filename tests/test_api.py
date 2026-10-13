@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from day10.api import app
+from app.api import app
 
 import httpx
 from openai import APIError
@@ -68,7 +68,7 @@ def test_ask():
     }
 
     with patch(
-        "day10.api.answer_question",
+        "app.api.answer_question",
         return_value=(FakeResult(), fake_sources, fake_usage),
     ):
         response = client.post(
@@ -98,7 +98,7 @@ def test_openai_failure_returns_503():
     )
 
     with patch(
-        "day10.api.answer_question",
+        "app.api.answer_question",
         side_effect=APIError(
             "Temporary upstream failure",
             request=fake_request,
@@ -171,7 +171,7 @@ async def test_concurrency_limit():
     ) as async_client:
 
         with patch(
-            "day10.api.answer_question",
+            "app.api.answer_question",
             side_effect=fake_answer_question,
         ):
             responses = await asyncio.gather(
@@ -229,7 +229,7 @@ def test_identical_question_uses_cache():
     }
 
     with patch(
-        "day10.api.answer_question",
+        "app.api.answer_question",
         return_value=(
             FakeResult(),
             fake_sources,

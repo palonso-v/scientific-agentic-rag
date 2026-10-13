@@ -1,4 +1,4 @@
-from day12.dynamic_agent import run_agent
+from app.dynamic_agent import run_agent
 
 EVAL_CASES = [
     {

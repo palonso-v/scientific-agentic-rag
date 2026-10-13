@@ -1,3 +1,4 @@
+
 # Secrets and environment variables
 .env
 .env.*
@@ -13,14 +14,12 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Local document indexes and embeddings
-day06/index/
-day06/index_v2/
+# Local runtime data (indexes, documents, databases)
+data/
+
+# Generated embeddings and scientific documents
 *.npy
 *.npz
-
-# Local scientific documents and extracted data
-day06/extracted/
 *.pdf
 
 # Local databases
@@ -44,7 +43,3 @@ temp/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Course-specific generated files
-day07/conversation.json
-day07/conversation_summary.json
