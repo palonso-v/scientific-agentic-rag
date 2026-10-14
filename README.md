@@ -188,6 +188,7 @@ deployment.
 - Retrieval quality on large document collections has not been
   established by the example demonstration.
 - No cloud deployment is currently provided.
+- The Docker CI smoke test validates API startup and health checks; running real RAG queries inside the container requires providing a compatible document index.
 
 ## Author
 
