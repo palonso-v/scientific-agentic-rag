@@ -1,9 +1,9 @@
 
 import sqlite3
-
 import pytest
 
 from app import database
+from app.database import update_request_answer, delete_request
 
 
 @pytest.fixture
@@ -71,3 +71,58 @@ def test_get_slow_requests(test_db):
     assert len(rows) == 2
     assert rows[0] == ("Slow question", 2500.0)
     assert rows[1] == ("Medium question", 1500.0)
+
+
+def test_update_request(test_db):
+    request_id = database.save_request(
+        question="What is PointNet?",
+        answer="Original answer",
+        latency_ms=100.0,
+    )
+
+    updated = update_request_answer(
+        request_id,
+        "Improved answer",
+    )
+
+    assert updated is True
+
+    rows = database.get_requests()
+
+    assert len(rows) == 1
+    assert rows[0][2] == "Improved answer"
+
+
+def test_delete_request(test_db):
+    request_id = database.save_request(
+        question="What is DGCNN?",
+        answer="A graph neural network.",
+        latency_ms=200.0,
+    )
+
+    deleted = delete_request(request_id)
+
+    assert deleted is True
+    assert database.get_requests() == []
+
+
+def test_feedback_join(test_db):
+    request_id = database.save_request(
+        question="What is DGCNN?",
+        answer="A graph neural network.",
+        latency_ms=300.0,
+    )
+
+    database.save_feedback(
+        request_id=request_id,
+        rating=0,
+        comment="Not enough detail.",
+    )
+
+    results = database.get_negative_feedback()
+
+    assert len(results) == 1
+    assert results[0][0] == "What is DGCNN?"
+    assert results[0][1] == "A graph neural network."
+    assert results[0][2] == 0
+    assert results[0][3] == "Not enough detail."

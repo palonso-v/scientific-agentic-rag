@@ -24,6 +24,19 @@ def initialize_database():
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                rating INTEGER NOT NULL CHECK (rating IN (0, 1)),
+                comment TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (request_id) REFERENCES requests(id)
+            )
+            """
+        )
+
         # Step 2: Check which columns already exist
         existing_columns = {
             row[1]
@@ -112,6 +125,81 @@ def get_slow_requests(minimum_latency: float):
             """,
             (minimum_latency,),
         )
+        return cursor.fetchall()
+
+
+def update_request_answer(request_id: int, new_answer: str) -> bool:
+    with closing(sqlite3.connect(DB_PATH)) as connection:
+        with connection:
+            cursor = connection.execute(
+                """
+                UPDATE requests
+                SET answer = ?
+                WHERE id = ?
+                """,
+                (new_answer, request_id),
+            )
+
+            return cursor.rowcount > 0
+
+
+def delete_request(request_id: int) -> bool:
+    with closing(sqlite3.connect(DB_PATH)) as connection:
+        with connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM requests
+                WHERE id = ?
+                """,
+                (request_id,),
+            )
+
+            return cursor.rowcount > 0
+
+
+
+def save_feedback(
+    request_id: int,
+    rating: int,
+    comment: str | None = None,
+) -> int:
+
+    with closing(sqlite3.connect(DB_PATH)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+
+        with connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO feedback (
+                    request_id,
+                    rating,
+                    comment
+                )
+                VALUES (?, ?, ?)
+                """,
+                (request_id, rating, comment),
+            )
+
+            return cursor.lastrowid
+
+
+def get_negative_feedback():
+    with closing(sqlite3.connect(DB_PATH)) as connection:
+        cursor = connection.execute(
+            """
+            SELECT
+                requests.question,
+                requests.answer,
+                feedback.rating,
+                feedback.comment
+            FROM feedback
+            JOIN requests
+                ON feedback.request_id = requests.id
+            WHERE feedback.rating = 0
+            ORDER BY feedback.id DESC
+            """
+        )
+
         return cursor.fetchall()
 
 
