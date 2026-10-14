@@ -43,3 +43,7 @@ temp/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated document indexes
+app/index/
+app/index_v2/

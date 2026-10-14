@@ -1,0 +1,19 @@
+
+[
+  {
+    "page": 1,
+    "text": "Scientific Demonstration Document: Climate and the Greenhouse Effect. The greenhouse effect is a natural process in which certain atmospheric gases absorb and emit infrared radiation. Important greenhouse gases include water vapor, carbon dioxide, methane, and nitrous oxide. The natural greenhouse effect helps maintain temperatures suitable for life on Earth."
+  },
+  {
+    "page": 2,
+    "text": "Carbon dioxide concentrations are commonly expressed in parts per million (ppm). For this synthetic demonstration, an imaginary monitoring station recorded an annual average carbon dioxide concentration of 400 ppm in 2015 and 420 ppm in 2025. These values are fictional test data and must not be interpreted as actual observations from a scientific station."
+  },
+  {
+    "page": 3,
+    "text": "Climate models use mathematical representations of physical processes to study Earth's climate system. Models may represent atmospheric circulation, ocean dynamics, radiative transfer, and interactions between the atmosphere and land surface. Model outputs are evaluated by comparing simulated results with observational datasets."
+  },
+  {
+    "page": 4,
+    "text": "Scientific uncertainty can arise from measurement limitations, incomplete knowledge of physical processes, and natural variability. Uncertainty does not necessarily mean that a scientific conclusion is unreliable. Researchers use multiple observations, models, and statistical methods to quantify uncertainty and evaluate confidence in their findings."
+  }
+]

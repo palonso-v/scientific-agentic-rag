@@ -1,26 +1,27 @@
 
 from pathlib import Path
 import json
+import argparse
 
 import numpy as np
 import tiktoken
 from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()
-client = OpenAI()
 
 BASE = Path(__file__).resolve().parent
-SOURCE = BASE / "extracted" / "paper.json"
-INDEX = BASE / "index"
-INDEX.mkdir(exist_ok=True)
+DEFAULT_SOURCE = BASE / "extracted" / "paper.json"
+DEFAULT_INDEX = BASE / "index_v2"
 
 EMBEDDING_MODEL = "text-embedding-3-small"
+CHUNK_SIZE = 400
+CHUNK_OVERLAP = 60
+
 encoding = tiktoken.get_encoding("cl100k_base")
 
 
-def split_text(text, size=400, overlap=60):
-    if not 0 <= overlap < size:
+def split_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    if size <= 0 or not 0 <= overlap < size:
         raise ValueError("Invalid chunk size or overlap.")
 
     tokens = encoding.encode(text)
@@ -33,85 +34,133 @@ def split_text(text, size=400, overlap=60):
     ]
 
 
-with SOURCE.open(encoding="utf-8") as f:
-    pages = json.load(f)
+def build_index(source: Path, index_root: Path, paper_id: str):
+    load_dotenv()
+    client = OpenAI()
 
-chunks = []
-
-for page in pages:
-    for j, text in enumerate(
-        split_text(page["text"]),
-        start=1
-    ):
-        chunks.append({
-            "id": f"paper_p{page['page']}_c{j}",
-            "paper_id": "paper",
-            "page": page["page"],
-            "text": text
-        })
-
-if not chunks:
-    raise ValueError("No text found to index.")
-
-print(f"Created {len(chunks)} chunks.")
-
-vectors = []
-
-# Batch the requests rather than embedding one chunk at a time.
-batch_size = 32
-
-for start in range(0, len(chunks), batch_size):
-    batch = chunks[start:start + batch_size]
-
-    response = client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=[item["text"] for item in batch]
-    )
-
-    batch_vectors = [
-        item.embedding
-        for item in sorted(
-            response.data,
-            key=lambda item: item.index
+    if not source.is_file():
+        raise FileNotFoundError(
+            f"Source document not found: {source}"
         )
-    ]
 
-    vectors.extend(batch_vectors)
+    with source.open(encoding="utf-8") as f:
+        pages = json.load(f)
 
-vectors = np.asarray(vectors, dtype=np.float32)
+    chunks = []
 
-norms = np.linalg.norm(
-    vectors, axis=1, keepdims=True
-)
+    for page in pages:
+        page_number = page["page"]
+        page_text = page["text"]
 
-if np.any(norms == 0):
-    raise ValueError("Encountered a zero embedding.")
+        for j, text in enumerate(split_text(page_text), start=1):
+            chunks.append({
+                "id": f"{paper_id}_p{page_number}_c{j}",
+                "paper": paper_id,
+                "page": page_number,
+                "text": text,
+            })
 
-vectors = vectors / norms
+    if not chunks:
+        raise ValueError("No text found to index.")
 
-assert len(chunks) == len(vectors)
+    print(f"Created {len(chunks)} chunks.")
 
-np.save(INDEX / "embeddings.npy", vectors)
+    vectors = []
+    batch_size = 32
 
-with (INDEX / "chunks.json").open(
-    "w", encoding="utf-8"
-) as f:
-    json.dump(chunks, f, ensure_ascii=False, indent=2)
+    for start in range(0, len(chunks), batch_size):
+        batch = chunks[start:start + batch_size]
 
-with (INDEX / "manifest.json").open(
-    "w", encoding="utf-8"
-) as f:
-    json.dump(
-        {
-            "embedding_model": EMBEDDING_MODEL,
-            "number_of_chunks": len(chunks),
-            "embedding_dimension": vectors.shape[1],
-            "chunk_size": 400,
-            "overlap": 60
-        },
-        f,
-        indent=2
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=[item["text"] for item in batch],
+        )
+
+        batch_vectors = [
+            item.embedding
+            for item in sorted(
+                response.data,
+                key=lambda item: item.index,
+            )
+        ]
+
+        vectors.extend(batch_vectors)
+
+    vectors = np.asarray(vectors, dtype=np.float32)
+
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+
+    if np.any(norms == 0):
+        raise ValueError("Encountered a zero embedding.")
+
+    vectors = vectors / norms
+
+    if len(chunks) != len(vectors):
+        raise ValueError("Chunk/embedding count mismatch.")
+
+    paper_dir = index_root / paper_id
+    paper_dir.mkdir(parents=True, exist_ok=True)
+
+    np.save(paper_dir / "embeddings.npy", vectors)
+
+    metadata = {
+        "paper_id": paper_id,
+        "embedding_model": EMBEDDING_MODEL,
+        "embedding_dimension": vectors.shape[1],
+        "chunk_size": CHUNK_SIZE,
+        "overlap": CHUNK_OVERLAP,
+        "chunks": chunks,
+    }
+
+    with (paper_dir / "metadata.json").open(
+        "w", encoding="utf-8"
+    ) as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+    print("Embedding matrix:", vectors.shape)
+    print("Index saved to:", paper_dir)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Build embeddings for a scientific document."
     )
 
-print("Embedding matrix:", vectors.shape)
-print("Index saved to:", INDEX)
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=DEFAULT_SOURCE,
+    )
+
+    parser.add_argument(
+        "--index",
+        type=Path,
+        default=DEFAULT_INDEX,
+    )
+
+    parser.add_argument(
+        "--paper-id",
+        type=str,
+        default="paper",
+    )
+
+    args = parser.parse_args()
+
+    if not args.paper_id or not all(
+        c.isalnum() or c in "-_"
+        for c in args.paper_id
+    ):
+        parser.error(
+            "--paper-id must contain only letters, numbers, "
+            "hyphens, or underscores."
+        )
+
+    build_index(
+        source=args.source,
+        index_root=args.index,
+        paper_id=args.paper_id,
+    )
+
+
+if __name__ == "__main__":
+    main()
