@@ -1,18 +1,15 @@
-
-from unittest.mock import patch
-
-from fastapi.testclient import TestClient
-
-from app.api import app
-
-import httpx
-from openai import APIError
-
 import asyncio
 import time
-
+import httpx
 import pytest
+import sqlite3
 
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+from openai import APIError
+
+from app import database
+from app.api import app
 from shared.cache import clear_cache
 
 
@@ -88,6 +85,29 @@ def test_ask():
     assert "34.32" in data["answer"]
     assert data["sources"][0]["page"] == 11
     assert data["latency_seconds"] >= 0
+
+    rows = database.get_requests()
+
+    assert len(rows) == 1
+    assert rows[0][1] == "What is PointNet accuracy under heavy noise?"
+    assert rows[0][2] == "34.32 ± 1.46%"
+    assert rows[0][3] >= 0
+
+    with sqlite3.connect(database.DB_PATH) as connection:
+        metrics = connection.execute(
+            """
+            SELECT cache_hit, input_tokens,
+                   output_tokens, estimated_cost_usd
+            FROM requests
+            WHERE id = ?
+            """,
+            (rows[0][0],),
+        ).fetchone()
+
+    assert metrics[0] == 0
+    assert metrics[1] == 1000
+    assert metrics[2] == 100
+    assert metrics[3] == pytest.approx(0.0012)
 
 
 def test_openai_failure_returns_503():
@@ -195,9 +215,18 @@ async def test_concurrency_limit():
 
 
 @pytest.fixture(autouse=True)
-def reset_cache():
+def reset_test_environment(tmp_path, monkeypatch):
+    # Clear cached answers before each test
     clear_cache()
+
+    # Give each test its own temporary SQLite database
+    test_db_path = tmp_path / "api_test.db"
+    monkeypatch.setattr(database, "DB_PATH", test_db_path)
+    database.initialize_database()
+
     yield
+
+    # Clear cached answers after each test
     clear_cache()
 
 
@@ -255,3 +284,42 @@ def test_identical_question_uses_cache():
     assert response2.status_code == 200
 
     assert mock_answer.call_count == 1
+
+
+
+def test_stats_endpoint():
+    # Insert two known records into our temporary database
+    database.save_request(
+        question="What is PointNet?",
+        answer="A neural network for point clouds.",
+        latency_ms=1000.0,
+        cache_hit=False,
+        input_tokens=100,
+        output_tokens=20,
+        estimated_cost_usd=0.001,
+    )
+
+    database.save_request(
+        question="What is DGCNN?",
+        answer="A graph-based neural network.",
+        latency_ms=200.0,
+        cache_hit=True,
+        input_tokens=0,
+        output_tokens=0,
+        estimated_cost_usd=0.0,
+    )
+
+    # Call the real FastAPI endpoint
+    response = client.get("/stats")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_requests"] == 2
+    assert data["average_latency_ms"] == 600.0
+    assert data["total_input_tokens"] == 100
+    assert data["total_output_tokens"] == 20
+    assert data["estimated_total_cost_usd"] == pytest.approx(0.001)
+
+    assert len(data["cache_statistics"]) == 2

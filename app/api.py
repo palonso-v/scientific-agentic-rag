@@ -2,26 +2,33 @@
 import asyncio
 import logging
 import time
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-
-from app.rag import answer_question
-
 import json
 import uuid
 
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 from openai import APIError
 
 from shared.cache import get_cached_answer, set_cached_answer
 
+from app.rag import answer_question
+from app.database import initialize_database, save_request
+from app.analytics import get_usage_summary, get_cache_statistics
+
+from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await asyncio.to_thread(initialize_database)
+    yield
+
 app = FastAPI(
     title="Scientific Literature Assistant",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 MAX_CONCURRENT_QUESTIONS = 3
@@ -54,6 +61,30 @@ class QuestionResponse(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/stats")
+async def stats():
+    summary, cache_rows = await asyncio.gather(
+        asyncio.to_thread(get_usage_summary),
+        asyncio.to_thread(get_cache_statistics),
+    )
+
+    return {
+        "total_requests": summary[0],
+        "average_latency_ms": summary[1],
+        "total_input_tokens": summary[2] or 0,
+        "total_output_tokens": summary[3] or 0,
+        "estimated_total_cost_usd": summary[4] or 0,
+        "cache_statistics": [
+            {
+                "cache_hit": bool(cache_hit),
+                "request_count": count,
+                "average_latency_ms": avg_latency,
+            }
+            for cache_hit, count, avg_latency in cache_rows
+        ],
+    }
 
 
 @app.post("/ask", response_model=QuestionResponse)
@@ -112,6 +143,27 @@ async def ask(request: QuestionRequest):
 
     latency = time.perf_counter() - start
 
+    try:
+        db_id = await asyncio.to_thread(
+            save_request,
+            question=request.question,
+            answer=result.answer,
+            latency_ms=latency * 1000,
+            cache_hit=cache_hit,
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
+            estimated_cost_usd=usage["estimated_cost_usd"],
+        )
+
+    except Exception:
+        logger.exception(
+            json.dumps({
+                "event": "database_write_failed",
+                "request_id": request_id,
+            })
+        )
+        db_id = None
+
     logger.info(
         json.dumps({
             "event": "question_processed",
@@ -135,6 +187,8 @@ async def ask(request: QuestionRequest):
             "retrieval_seconds": usage["rerank"]["retrieval_seconds"],
 
             "cache_hit": cache_hit,
+
+            "db_request_id": db_id,
         })
     )
 
