@@ -332,3 +332,44 @@ def test_stats_endpoint():
     assert data["estimated_total_cost_usd"] == pytest.approx(0.001)
 
     assert len(data["cache_statistics"]) == 2
+
+
+
+def test_agent_endpoint(monkeypatch):
+    def fake_run_langgraph_agent(question):
+        return {
+            "answer": "The increase was 20 ppm.",
+            "actions": [
+                "literature",
+                "calculator",
+                "finish",
+            ],
+            "steps": 3,
+        }
+
+    monkeypatch.setattr(
+        "app.api.run_langgraph_agent",
+        fake_run_langgraph_agent,
+    )
+
+    response = client.post(
+        "/agent",
+        json={
+            "question": (
+                "According to the document, what were the carbon dioxide "
+                "concentrations in 2015 and 2025, and calculate the increase?"
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["answer"] == "The increase was 20 ppm."
+    assert data["actions"] == [
+        "literature",
+        "calculator",
+        "finish",
+    ]
+    assert data["steps"] == 3

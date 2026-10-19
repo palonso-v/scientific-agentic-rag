@@ -9,3 +9,4 @@ pytest
 httpx
 uvicorn[standard]
 psycopg[binary]
+langgraph

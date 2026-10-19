@@ -14,6 +14,7 @@ from shared.cache import get_cached_answer, set_cached_answer
 from app.rag import answer_question
 from app.database import initialize_database, save_request
 from app.analytics import get_usage_summary, get_cache_statistics
+from app.langgraph_agent import run_langgraph_agent
 
 from contextlib import asynccontextmanager
 
@@ -56,6 +57,12 @@ class QuestionResponse(BaseModel):
     answer: str
     sources: list[Source]
     latency_seconds: float
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    actions: list[str]
+    steps: int
 
 
 @app.get("/health")
@@ -197,4 +204,42 @@ async def ask(request: QuestionRequest):
         answer=result.answer,
         sources=[Source(**source) for source in sources],
         latency_seconds=round(latency, 3),
+    )
+
+
+@app.post("/agent", response_model=AgentResponse)
+async def agent(request: QuestionRequest):
+    try:
+        async with question_semaphore:
+            result = await asyncio.to_thread(
+                run_langgraph_agent,
+                request.question,
+            )
+
+    except APIError:
+        logger.exception(
+            json.dumps({
+                "event": "agent_openai_api_failed",
+            })
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="AI service temporarily unavailable.",
+        )
+
+    except Exception:
+        logger.exception(
+            json.dumps({
+                "event": "agent_failed",
+            })
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to process the agent request.",
+        )
+
+    return AgentResponse(
+        answer=result["answer"],
+        actions=result["actions"],
+        steps=result["steps"],
     )
