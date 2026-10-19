@@ -2,7 +2,6 @@ import asyncio
 import time
 import httpx
 import pytest
-import sqlite3
 
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -93,18 +92,24 @@ def test_ask():
     assert rows[0][2] == "34.32 ± 1.46%"
     assert rows[0][3] >= 0
 
-    with sqlite3.connect(database.DB_PATH) as connection:
-        metrics = connection.execute(
-            """
-            SELECT cache_hit, input_tokens,
-                   output_tokens, estimated_cost_usd
-            FROM requests
-            WHERE id = ?
-            """,
-            (rows[0][0],),
-        ).fetchone()
+    with database.get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    cache_hit,
+                    input_tokens,
+                    output_tokens,
+                    estimated_cost_usd
+                FROM requests
+                WHERE id = %s
+                """,
+                (rows[0][0],),
+            )
 
-    assert metrics[0] == 0
+            metrics = cursor.fetchone()
+
+    assert metrics[0] is False
     assert metrics[1] == 1000
     assert metrics[2] == 100
     assert metrics[3] == pytest.approx(0.0012)
@@ -215,18 +220,22 @@ async def test_concurrency_limit():
 
 
 @pytest.fixture(autouse=True)
-def reset_test_environment(tmp_path, monkeypatch):
-    # Clear cached answers before each test
+def reset_test_environment():
     clear_cache()
 
-    # Give each test its own temporary SQLite database
-    test_db_path = tmp_path / "api_test.db"
-    monkeypatch.setattr(database, "DB_PATH", test_db_path)
     database.initialize_database()
+
+    with database.get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                TRUNCATE TABLE feedback, requests
+                RESTART IDENTITY CASCADE
+                """
+            )
 
     yield
 
-    # Clear cached answers after each test
     clear_cache()
 
 

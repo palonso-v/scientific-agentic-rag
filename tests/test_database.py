@@ -1,37 +1,44 @@
-
-import sqlite3
 import pytest
 
 from app import database
 from app.database import update_request_answer, delete_request
 
 
-@pytest.fixture
-def test_db(tmp_path, monkeypatch):
-    db_path = tmp_path / "test_assistant.db"
-
-    monkeypatch.setattr(database, "DB_PATH", db_path)
-
+@pytest.fixture(autouse=True)
+def clean_database():
     database.initialize_database()
 
-    return db_path
+    with database.get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                TRUNCATE TABLE feedback, requests
+                RESTART IDENTITY CASCADE
+                """
+            )
+
+    yield
 
 
-def test_database_initialization(test_db):
-    assert test_db.exists()
+def test_database_initialization():
+    with database.get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_name = 'requests'
+                )
+                """
+            )
 
-    with sqlite3.connect(test_db) as connection:
-        cursor = connection.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'requests'
-            """
-        )
-        assert cursor.fetchone() is not None
+            exists = cursor.fetchone()[0]
+
+    assert exists is True
 
 
-def test_save_request(test_db):
+def test_save_request():
     request_id = database.save_request(
         question="What is PointNet?",
         answer="A neural network for point clouds.",
@@ -47,7 +54,7 @@ def test_save_request(test_db):
     assert rows[0][3] == 1200.0
 
 
-def test_get_slow_requests(test_db):
+def test_get_slow_requests():
     database.save_request(
         "Fast question",
         "Fast answer",
@@ -73,7 +80,7 @@ def test_get_slow_requests(test_db):
     assert rows[1] == ("Medium question", 1500.0)
 
 
-def test_update_request(test_db):
+def test_update_request():
     request_id = database.save_request(
         question="What is PointNet?",
         answer="Original answer",
@@ -93,7 +100,7 @@ def test_update_request(test_db):
     assert rows[0][2] == "Improved answer"
 
 
-def test_delete_request(test_db):
+def test_delete_request():
     request_id = database.save_request(
         question="What is DGCNN?",
         answer="A graph neural network.",
@@ -106,7 +113,7 @@ def test_delete_request(test_db):
     assert database.get_requests() == []
 
 
-def test_feedback_join(test_db):
+def test_feedback_join():
     request_id = database.save_request(
         question="What is DGCNN?",
         answer="A graph neural network.",
