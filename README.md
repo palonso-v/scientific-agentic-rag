@@ -1,13 +1,8 @@
+# Scientific Agentic RAG Assistant
 
-# Scientific RAG Assistant
+A Python-based scientific literature assistant using retrieval-augmented generation (RAG), semantic search, LLM reranking, grounded answer generation, validated citations, and production-oriented API infrastructure.
 
-A Python-based scientific literature assistant using retrieval-augmented
-generation (RAG), semantic search, LLM reranking, and grounded answer
-generation with validated citations.
-
-The repository includes a FastAPI backend, SQLite request logging,
-usage analytics, automated testing, and GitHub Actions continuous
-integration.
+The repository includes a FastAPI backend, PostgreSQL persistence, usage analytics, Docker containerization, automated testing, GitHub Actions CI, and cloud deployment on Google Cloud Run.
 
 ## Features
 
@@ -20,14 +15,16 @@ integration.
 - FastAPI REST service
 - Asynchronous request handling and concurrency control
 - Response caching
-- SQLite request persistence and usage analytics
+- PostgreSQL request persistence and usage analytics
+- User feedback storage
 - Docker containerization
 - Automated tests and GitHub Actions CI
+- Cloud deployment on Google Cloud Run
+- Runtime secret management through Google Secret Manager
 
 ## Technology Stack
 
-Python, OpenAI API, FastAPI, Pydantic, NumPy, SQLite,
-Docker, pytest, GitHub Actions.
+Python, OpenAI API, FastAPI, Pydantic, NumPy, PostgreSQL, Supabase, psycopg, Docker, pytest, GitHub Actions, Google Cloud Run, Google Secret Manager.
 
 ## Quick Start
 
@@ -62,17 +59,28 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure the OpenAI API key
+### 4. Configure environment variables
 
-Copy `.env.example` to `.env` and replace the placeholder
-with your OpenAI API key.
+Copy `.env.example` to `.env` and configure:
+
+```text
+OPENAI_API_KEY=your_openai_api_key
+DATABASE_URL=your_postgresql_connection_string
+```
 
 An OpenAI API account with available API credits is required.
 
+A PostgreSQL database is also required for request persistence, usage analytics, and feedback storage.
+
+The deployed version uses Supabase PostgreSQL.
+
 ### 5. Build the example document index
 
-The repository includes a synthetic climate-science document
-at `app/extracted/paper.json`.
+The repository includes a synthetic climate-science document at:
+
+```text
+app/extracted/paper.json
+```
 
 Run:
 
@@ -80,7 +88,11 @@ Run:
 python -m app.indexing --source app/extracted/paper.json --paper-id climate-demo
 ```
 
-This creates a local vector index in `app/index_v2/climate-demo/`.
+This creates a local vector index in:
+
+```text
+app/index_v2/climate-demo/
+```
 
 ### 6. Test semantic retrieval
 
@@ -114,7 +126,9 @@ python -m uvicorn app.api:app --reload
 
 Open:
 
+```text
 http://127.0.0.1:8000/docs
+```
 
 Available endpoints include:
 
@@ -128,8 +142,9 @@ Available endpoints include:
 python -m pytest tests/ -q
 ```
 
-The automated suite uses mocked LLM calls, so it does not
-require real API requests.
+The automated suite uses mocked LLM calls, so it does not require real OpenAI API requests.
+
+Database tests run against PostgreSQL.
 
 ## Architecture
 
@@ -158,37 +173,114 @@ Grounded Answer Generation
 Citation Validation
         |
         v
-FastAPI Response
+FastAPI
         |
-        v
-SQLite Logging and Analytics
+        +----------------------+
+        |                      |
+        v                      v
+API Response            PostgreSQL Persistence
+                               |
+                               v
+                        Requests / Feedback
+                        Usage / Cost Analytics
 ```
+
+## Deployment Architecture
+
+```text
+Client
+  |
+  v
+Google Cloud Run
+  |
+  v
+FastAPI Application
+  |
+  +--------------------+
+  |                    |
+  v                    v
+OpenAI API       Supabase PostgreSQL
+  |
+  v
+RAG Pipeline
+```
+
+Runtime secrets such as `OPENAI_API_KEY` and `DATABASE_URL` are provided to Cloud Run through Google Secret Manager.
+
+The application container is built from source and deployed to Google Cloud Run.
 
 ## Evaluation and Reliability
 
 The application includes:
 
-- Unit and API integration tests
+- Unit tests
+- API integration tests
+- PostgreSQL integration tests
 - Mocked LLM responses for deterministic testing
 - Retrieval and agent evaluation scripts
 - Structured error handling
-- Request latency and token usage tracking
+- Upstream API failure handling
+- Request latency tracking
+- Token usage tracking
+- Estimated API cost tracking
 - Cache-hit analytics
-- GitHub Actions CI with Docker build and API health-check validation
+- Request and feedback persistence
+- GitHub Actions CI
+- Docker build validation
+- Docker API health-check smoke test
+- Temporary PostgreSQL service during CI
+
+## Continuous Integration
+
+GitHub Actions automatically:
+
+1. Starts a temporary PostgreSQL service
+2. Installs application dependencies
+3. Runs the automated test suite
+4. Builds the Docker image
+5. Starts the application container
+6. Verifies the `/health` endpoint
+
+This allows database-backed tests and container startup behavior to be validated without connecting CI to the production database.
+
+## Cloud Deployment
+
+The application is deployed on Google Cloud Run.
+
+The deployed service uses:
+
+- Google Cloud Run for container execution
+- Google Secret Manager for runtime credentials
+- Supabase PostgreSQL for persistent application data
+- OpenAI API for embeddings, reranking, and generation
+
+The application does not rely on local SQLite storage, so request history and analytics persist across Cloud Run container restarts and revisions.
 
 ## Limitations
 
-This project is a portfolio demonstration, not a production
-deployment.
+This project is a production-oriented portfolio system rather than a large-scale commercial deployment.
 
 - The example document is small and synthetic.
 - Real LLM requests require API credentials and incur API costs.
-- The vector index must be built locally before using retrieval.
+- The vector index must currently be built before retrieval.
 - Automated API tests mock external LLM calls.
-- Retrieval quality on large document collections has not been
-  established by the example demonstration.
-- No cloud deployment is currently provided.
-- The Docker CI smoke test validates API startup and health checks; running real RAG queries inside the container requires providing a compatible document index.
+- Retrieval quality on large heterogeneous document collections has not yet been established by the example demonstration.
+- The current retrieval layer uses semantic vector search rather than hybrid lexical + semantic retrieval.
+- The local vector index is not yet backed by a managed vector database.
+- The current cloud deployment is intentionally small-scale.
+- Authentication and user-level authorization are not yet implemented.
+- More advanced agent orchestration is still under development.
+
+## Planned Improvements
+
+Planned next steps include:
+
+- Stateful agent orchestration with LangGraph
+- MCP-based tool integration
+- Improved tracing and observability
+- Hybrid lexical + semantic retrieval
+- More formal RAG and agent evaluation
+- Stronger deployment automation and production monitoring
 
 ## Author
 
