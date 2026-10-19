@@ -1,66 +1,56 @@
+import os
 
-import sqlite3
-from pathlib import Path
-from contextlib import closing
+import psycopg
+from dotenv import load_dotenv
 
-DB_PATH = Path("data") / "assistant.db"
 
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+def get_connection():
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is not configured."
+        )
+
+    return psycopg.connect(DATABASE_URL)
 
 
 def initialize_database():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
 
-    with sqlite3.connect(DB_PATH) as connection:
-        # Step 1: Create the table if it doesn't exist
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                question TEXT NOT NULL,
-                answer TEXT NOT NULL,
-                latency_ms REAL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_id INTEGER NOT NULL,
-                rating INTEGER NOT NULL CHECK (rating IN (0, 1)),
-                comment TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (request_id) REFERENCES requests(id)
-            )
-            """
-        )
-
-        # Step 2: Check which columns already exist
-        existing_columns = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(requests)"
-            ).fetchall()
-        }
-
-        # Step 3: Define the new columns
-        new_columns = {
-            "cache_hit": "INTEGER DEFAULT 0",
-            "input_tokens": "INTEGER DEFAULT 0",
-            "output_tokens": "INTEGER DEFAULT 0",
-            "estimated_cost_usd": "REAL DEFAULT 0",
-        }
-
-        # Step 4: Add only the missing columns
-        for column_name, column_type in new_columns.items():
-            if column_name not in existing_columns:
-                connection.execute(
-                    f"ALTER TABLE requests "
-                    f"ADD COLUMN {column_name} {column_type}"
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS requests (
+                    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    latency_ms DOUBLE PRECISION,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    cache_hit BOOLEAN DEFAULT FALSE,
+                    input_tokens INTEGER DEFAULT 0,
+                    output_tokens INTEGER DEFAULT 0,
+                    estimated_cost_usd DOUBLE PRECISION DEFAULT 0
                 )
+                """
+            )
 
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    request_id INTEGER NOT NULL,
+                    rating INTEGER NOT NULL CHECK (rating IN (0, 1)),
+                    comment TEXT,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (request_id)
+                        REFERENCES requests(id)
+                )
+                """
+            )
 
 
 def save_request(
@@ -73,9 +63,10 @@ def save_request(
     estimated_cost_usd: float = 0.0,
 ) -> int:
 
-    with closing(sqlite3.connect(DB_PATH)) as connection:
-        with connection:
-            cursor = connection.execute(
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+
+            cursor.execute(
                 """
                 INSERT INTO requests (
                     question,
@@ -86,56 +77,75 @@ def save_request(
                     output_tokens,
                     estimated_cost_usd
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
                 """,
                 (
                     question,
                     answer,
                     latency_ms,
-                    int(cache_hit),
+                    cache_hit,
                     input_tokens,
                     output_tokens,
                     estimated_cost_usd,
                 ),
             )
 
-            return cursor.lastrowid
+            row = cursor.fetchone()
+
+            if row is None:
+                raise RuntimeError(
+                    "Database did not return a request ID."
+                )
+
+            return row[0]
 
 
 def get_requests():
-    with sqlite3.connect(DB_PATH) as connection:
-        cursor = connection.execute(
-            """
-            SELECT id, question, answer, latency_ms, created_at
-            FROM requests
-            ORDER BY id DESC
-            """
-        )
-        return cursor.fetchall()
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+
+            cursor.execute(
+                """
+                SELECT id, question, answer, latency_ms, created_at
+                FROM requests
+                ORDER BY id DESC
+                """
+            )
+
+            return cursor.fetchall()
 
 
 def get_slow_requests(minimum_latency: float):
-    with sqlite3.connect(DB_PATH) as connection:
-        cursor = connection.execute(
-            """
-            SELECT question, latency_ms
-            FROM requests
-            WHERE latency_ms > ?
-            ORDER BY latency_ms DESC
-            """,
-            (minimum_latency,),
-        )
-        return cursor.fetchall()
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+
+            cursor.execute(
+                """
+                SELECT question, latency_ms
+                FROM requests
+                WHERE latency_ms > %s
+                ORDER BY latency_ms DESC
+                """,
+                (minimum_latency,),
+            )
+
+            return cursor.fetchall()
 
 
-def update_request_answer(request_id: int, new_answer: str) -> bool:
-    with closing(sqlite3.connect(DB_PATH)) as connection:
-        with connection:
-            cursor = connection.execute(
+def update_request_answer(
+    request_id: int,
+    new_answer: str,
+) -> bool:
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+
+            cursor.execute(
                 """
                 UPDATE requests
-                SET answer = ?
-                WHERE id = ?
+                SET answer = %s
+                WHERE id = %s
                 """,
                 (new_answer, request_id),
             )
@@ -144,18 +154,19 @@ def update_request_answer(request_id: int, new_answer: str) -> bool:
 
 
 def delete_request(request_id: int) -> bool:
-    with closing(sqlite3.connect(DB_PATH)) as connection:
-        with connection:
-            cursor = connection.execute(
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+
+            cursor.execute(
                 """
                 DELETE FROM requests
-                WHERE id = ?
+                WHERE id = %s
                 """,
                 (request_id,),
             )
 
             return cursor.rowcount > 0
-
 
 
 def save_feedback(
@@ -164,45 +175,58 @@ def save_feedback(
     comment: str | None = None,
 ) -> int:
 
-    with closing(sqlite3.connect(DB_PATH)) as connection:
-        connection.execute("PRAGMA foreign_keys = ON")
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
 
-        with connection:
-            cursor = connection.execute(
+            cursor.execute(
                 """
                 INSERT INTO feedback (
                     request_id,
                     rating,
                     comment
                 )
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
+                RETURNING id
                 """,
-                (request_id, rating, comment),
+                (
+                    request_id,
+                    rating,
+                    comment,
+                ),
             )
 
-            return cursor.lastrowid
+            row = cursor.fetchone()
+
+            if row is None:
+                raise RuntimeError(
+                    "Database did not return a feedback ID."
+                )
+
+            return row[0]
 
 
 def get_negative_feedback():
-    with closing(sqlite3.connect(DB_PATH)) as connection:
-        cursor = connection.execute(
-            """
-            SELECT
-                requests.question,
-                requests.answer,
-                feedback.rating,
-                feedback.comment
-            FROM feedback
-            JOIN requests
-                ON feedback.request_id = requests.id
-            WHERE feedback.rating = 0
-            ORDER BY feedback.id DESC
-            """
-        )
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
 
-        return cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT
+                    requests.question,
+                    requests.answer,
+                    feedback.rating,
+                    feedback.comment
+                FROM feedback
+                JOIN requests
+                    ON feedback.request_id = requests.id
+                WHERE feedback.rating = 0
+                ORDER BY feedback.id DESC
+                """
+            )
+
+            return cursor.fetchall()
 
 
 if __name__ == "__main__":
     initialize_database()
-    print(f"Database initialized at {DB_PATH}")
+    print("PostgreSQL database initialized.")
