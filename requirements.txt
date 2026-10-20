@@ -10,3 +10,4 @@ httpx
 uvicorn[standard]
 psycopg[binary]
 langgraph
+mcp[cli]

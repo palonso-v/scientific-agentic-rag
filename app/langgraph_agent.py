@@ -9,9 +9,10 @@ from app.dynamic_agent import (
 from app.rag import answer_question
 from app.workflow import (
     extract_calculation,
-    calculate,
     synthesize_answer,
 )
+
+from app.mcp_client import call_calculator_sync
 
 
 MAX_AGENT_STEPS = 5
@@ -25,12 +26,20 @@ class AgentState(TypedDict):
     instruction: str | None
     answer: str | None
     steps: int
+    error: str | None
 
 
 def decision_node(state: AgentState) -> dict:
+    observations = list(state["observations"])
+
+    if state["error"] is not None:
+        observations.append(
+            f"Previous tool error: {state['error']}"
+        )
+
     decision: AgentDecision = decide_next_action(
         question=state["question"],
-        observations=state["observations"],
+        observations=observations,
     )
 
     return {
@@ -45,19 +54,23 @@ def literature_node(state: AgentState) -> dict:
     instruction = state["instruction"]
 
     if instruction is None:
-        raise ValueError(
-            "Literature node requires an instruction."
-        )
+        return {
+            "error": "Literature node received no instruction.",
+            "observations": (
+                state["observations"]
+                + ["Literature tool failed: missing instruction."]
+            ),
+        }
+
+    literature_instruction = (
+        f"{instruction}\n\n"
+        "Retrieve and report only information explicitly supported "
+        "by the source documents. Do not perform arithmetic, "
+        "calculations, comparisons, or derive new numerical values. "
+        "Return the source values needed for later reasoning."
+    )
 
     try:
-        literature_instruction = (
-            f"{instruction}\n\n"
-            "Retrieve and report only information explicitly supported "
-            "by the source documents. Do not perform arithmetic, "
-            "calculations, comparisons, or derive new numerical values. "
-            "Return the source values needed for later reasoning."
-        )
-
         result, sources = answer_question(
             literature_instruction,
         )
@@ -66,55 +79,109 @@ def literature_node(state: AgentState) -> dict:
             f"Literature result:\n{result.answer}"
         )
 
-    except ValueError as exc:
-        observation = (
-            "Literature search failed to provide "
-            "sufficient usable evidence. "
-            f"Tool message: {exc}"
+        return {
+            "observations": (
+                state["observations"] + [observation]
+            ),
+            "error": None,
+        }
+
+    except Exception as exc:
+        error_message = (
+            f"Literature tool failed: {exc}"
         )
 
-    return {
-        "observations": (
-            state["observations"] + [observation]
-        )
-    }
+        return {
+            "observations": (
+                state["observations"] + [error_message]
+            ),
+            "error": error_message,
+        }
+
 
 
 def calculator_node(state: AgentState) -> dict:
-    if not state["observations"]:
-        raise ValueError(
-            "Calculator requires previous observations."
-        )
-
     instruction = state["instruction"]
 
+    if (
+        instruction is None
+        or state["next_action"] != "calculator"
+    ):
+        instruction = state["question"]
+
     if instruction is None:
-        raise ValueError(
-            "Calculator node requires an instruction."
+        error_message = (
+            "Calculator tool failed: missing instruction."
         )
 
-    previous_results = "\n\n".join(
-        state["observations"]
-    )
+        return {
+            "observations": (
+                state["observations"] + [error_message]
+            ),
+            "error": error_message,
+        }
 
-    request = extract_calculation(
-        instruction,
-        previous_results,
-    )
+    if not state["observations"]:
+        error_message = (
+            "Calculator tool failed: no previous observations available."
+        )
 
-    value = calculate(request)
+        return {
+            "observations": (
+                state["observations"] + [error_message]
+            ),
+            "error": error_message,
+        }
 
-    return {
-        "observations": (
+    try:
+        previous_results = "\n\n".join(
             state["observations"]
-            + [f"Calculation result: {value}"]
         )
-    }
 
+        request = extract_calculation(
+            instruction,
+            previous_results,
+        )
+
+        value = call_calculator_sync(
+            operation=request.operation,
+            a=request.a,
+            b=request.b,
+        )
+
+        return {
+            "observations": (
+                state["observations"]
+                + [f"Calculation result: {value}"]
+            ),
+            "error": None,
+        }
+
+    except Exception as exc:
+        error_message = (
+            f"Calculator tool failed: {exc}"
+        )
+
+        return {
+            "observations": (
+                state["observations"] + [error_message]
+            ),
+            "error": error_message,
+        }
 
 def finish_node(state: AgentState) -> dict:
+    synthesis_question = (
+        f"{state['question']}\n\n"
+        "When producing the final answer, use only facts and "
+        "calculation results explicitly present in the observations. "
+        "Do not perform arithmetic or calculations yourself. "
+        "If the user requested a calculation but the calculator tool "
+        "failed and no explicit calculation result is present in the "
+        "observations, state that the calculation could not be completed."
+    )
+
     answer = synthesize_answer(
-        state["question"],
+        synthesis_question,
         state["observations"],
     )
 
@@ -134,6 +201,42 @@ def route_decision(
         return "finish"
 
     action = state["next_action"]
+
+    # If the user requested a calculation, do not allow the
+    # agent to finish until the calculator has produced a result.
+    calculation_requested = any(
+        phrase in state["question"].lower()
+        for phrase in (
+            "calculate",
+            "calculation",
+            "difference",
+            "increase",
+            "decrease",
+            "sum",
+            "multiply",
+            "divide",
+            "percentage",
+            "percent change",
+        )
+    )
+
+    calculation_completed = any(
+        observation.startswith("Calculation result:")
+        for observation in state["observations"]
+    )
+
+    calculator_failed = any(
+        observation.startswith("Calculator tool failed:")
+        for observation in state["observations"]
+    )
+
+    if (
+        calculation_requested
+        and not calculation_completed
+        and not calculator_failed
+        and state["observations"]
+    ):
+        return "calculator"
 
     if action == "literature":
         return "literature"
@@ -210,6 +313,7 @@ def run_langgraph_agent(
         "instruction": None,
         "answer": None,
         "steps": 0,
+        "error": None,
     }
 
     final_state = agent_graph.invoke(
@@ -225,23 +329,23 @@ if __name__ == "__main__":
         "concentrations in 2015 and 2025, and calculate the increase?"
     )
 
-    result = run_langgraph_agent(
-        question
-    )
+    result = run_langgraph_agent(question)
 
-    print(
-        "\n========== FINAL ANSWER =========="
-    )
+    print("\n========== FINAL ANSWER ==========")
     print(result["answer"])
 
-    print(
-        "\n========== TRACE =========="
-    )
-    print(
-        "Actions:",
-        result["actions"],
-    )
-    print(
-        "Steps:",
-        result["steps"],
-    )
+    print("\n========== TRACE ==========")
+    print("Actions:", result["actions"])
+    print("Steps:", result["steps"])
+
+    print("\n========== OBSERVATIONS ==========")
+
+    for i, observation in enumerate(
+        result["observations"],
+        start=1,
+    ):
+        print(f"\nObservation {i}:")
+        print(observation)
+
+    print("\n========== ERROR ==========")
+    print(result["error"])
