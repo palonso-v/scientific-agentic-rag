@@ -29,7 +29,11 @@ def test_literature_calculator_finish(monkeypatch):
     def fake_decide_next_action(question, observations):
         return next(decisions)
 
-    def fake_answer_question(question):
+    def fake_answer_question(
+        question,
+        paper_id=None,
+        return_usage=False,
+    ):
         result = SimpleNamespace(
             answer=(
                 "The document reports 400 ppm in 2015 "
@@ -37,7 +41,12 @@ def test_literature_calculator_finish(monkeypatch):
             )
         )
 
-        return result, []
+        return result, [], {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "total_tokens": 120,
+            "estimated_cost_usd": 0.001,
+        }
 
     def fake_extract_calculation(instruction, previous_results):
         return SimpleNamespace(
@@ -127,7 +136,11 @@ def test_insufficient_evidence_then_finish(monkeypatch):
     def fake_decide_next_action(question, observations):
         return next(decisions)
 
-    def fake_answer_question(question):
+    def fake_answer_question(
+        question,
+        paper_id=None,
+        return_usage=False,
+    ):
         result = SimpleNamespace(
             answer=(
                 "The supplied document does not contain "
@@ -135,7 +148,12 @@ def test_insufficient_evidence_then_finish(monkeypatch):
             )
         )
 
-        return result, []
+        return result, [], {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "total_tokens": 120,
+            "estimated_cost_usd": 0.001,
+        }
 
     def fake_synthesize_answer(question, observations):
         return (
@@ -371,7 +389,11 @@ def test_calculator_node_uses_mcp(monkeypatch):
     def fake_decide_next_action(question, observations):
         return next(decisions)
 
-    def fake_answer_question(question):
+    def fake_answer_question(
+        question,
+        paper_id=None,
+        return_usage=False,
+    ):
         result = SimpleNamespace(
             answer=(
                 "The document reports 400 ppm in 2015 "
@@ -379,7 +401,12 @@ def test_calculator_node_uses_mcp(monkeypatch):
             )
         )
 
-        return result, []
+        return result, [], {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "total_tokens": 120,
+            "estimated_cost_usd": 0.001,
+        }
 
     def fake_extract_calculation(
         instruction,

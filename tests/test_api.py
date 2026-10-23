@@ -336,7 +336,10 @@ def test_stats_endpoint():
 
 
 def test_agent_endpoint(monkeypatch):
-    def fake_run_langgraph_agent(question):
+    def fake_run_langgraph_agent(
+        question,
+        request_id=None,
+    ):
         return {
             "answer": "The increase was 20 ppm.",
             "actions": [

@@ -14,9 +14,13 @@ from app.workflow import (
 
 from app.mcp_client import call_calculator_sync
 
+from langfuse.langchain import CallbackHandler
+from langfuse import get_client
+
+
+langfuse = get_client()
 
 MAX_AGENT_STEPS = 5
-
 
 class AgentState(TypedDict):
     question: str
@@ -71,9 +75,32 @@ def literature_node(state: AgentState) -> dict:
     )
 
     try:
-        result, sources = answer_question(
-            literature_instruction,
-        )
+        with langfuse.start_as_current_observation(
+            name="literature-rag",
+            as_type="retriever",
+            input={
+                "instruction": literature_instruction,
+            },
+        ) as span:
+
+            result, sources, usage = answer_question(
+                literature_instruction,
+                None,
+                True,
+            )
+
+            span.update(
+                output={
+                    "answer": result.answer,
+                    "source_count": len(sources),
+                },
+                metadata={
+                    "input_tokens": usage["input_tokens"],
+                    "output_tokens": usage["output_tokens"],
+                    "total_tokens": usage["total_tokens"],
+                    "estimated_cost_usd": usage["estimated_cost_usd"],
+                },
+            )
 
         observation = (
             f"Literature result:\n{result.answer}"
@@ -97,7 +124,6 @@ def literature_node(state: AgentState) -> dict:
             ),
             "error": error_message,
         }
-
 
 
 def calculator_node(state: AgentState) -> dict:
@@ -143,11 +169,42 @@ def calculator_node(state: AgentState) -> dict:
             previous_results,
         )
 
-        value = call_calculator_sync(
-            operation=request.operation,
-            a=request.a,
-            b=request.b,
-        )
+        with langfuse.start_as_current_observation(
+            name="mcp-calculator",
+            as_type="tool",
+            input={
+                "operation": request.operation,
+                "a": request.a,
+                "b": request.b,
+            },
+        ) as span:
+
+            try:
+                value = call_calculator_sync(
+                    operation=request.operation,
+                    a=request.a,
+                    b=request.b,
+                )
+
+                span.update(
+                    output={
+                        "result": value,
+                    },
+                    metadata={
+                        "protocol": "MCP",
+                    },
+                )
+
+            except Exception as exc:
+                span.update(
+                    level="ERROR",
+                    status_message=str(exc),
+                    metadata={
+                        "protocol": "MCP",
+                    },
+                )
+
+                raise
 
         return {
             "observations": (
@@ -304,6 +361,7 @@ agent_graph = builder.compile()
 
 def run_langgraph_agent(
     question: str,
+    request_id: str | None = None,
 ):
     initial_state: AgentState = {
         "question": question,
@@ -316,8 +374,25 @@ def run_langgraph_agent(
         "error": None,
     }
 
+    langfuse_handler = CallbackHandler()
+
+    config = {
+        "callbacks": [langfuse_handler],
+        "metadata": {
+            "langfuse_tags": [
+                "langgraph",
+                "scientific-rag",
+            ],
+            "question": question,
+        },
+    }
+
+    if request_id is not None:
+        config["metadata"]["request_id"] = request_id
+
     final_state = agent_graph.invoke(
-        initial_state
+        initial_state,
+        config=config,
     )
 
     return final_state

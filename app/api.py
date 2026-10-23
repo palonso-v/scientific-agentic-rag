@@ -209,19 +209,24 @@ async def ask(request: QuestionRequest):
 
 @app.post("/agent", response_model=AgentResponse)
 async def agent(request: QuestionRequest):
+    request_id = str(uuid.uuid4())
+
     try:
         async with question_semaphore:
             result = await asyncio.to_thread(
                 run_langgraph_agent,
                 request.question,
+                request_id,
             )
 
     except APIError:
         logger.exception(
             json.dumps({
                 "event": "agent_openai_api_failed",
+                "request_id": request_id,
             })
         )
+
         raise HTTPException(
             status_code=503,
             detail="AI service temporarily unavailable.",
@@ -231,12 +236,24 @@ async def agent(request: QuestionRequest):
         logger.exception(
             json.dumps({
                 "event": "agent_failed",
+                "request_id": request_id,
             })
         )
+
         raise HTTPException(
             status_code=500,
             detail="Unable to process the agent request.",
         )
+
+    logger.info(
+        json.dumps({
+            "event": "agent_processed",
+            "request_id": request_id,
+            "actions": result["actions"],
+            "steps": result["steps"],
+            "error": result.get("error"),
+        })
+    )
 
     return AgentResponse(
         answer=result["answer"],
