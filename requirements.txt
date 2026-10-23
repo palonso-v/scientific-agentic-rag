@@ -12,3 +12,4 @@ psycopg[binary]
 langgraph
 mcp[cli]
 langfuse
+rank_bm25

@@ -1,8 +1,8 @@
 # Scientific Agentic RAG Assistant
 
-A Python-based scientific literature assistant combining retrieval-augmented generation (RAG), semantic search, LLM reranking, grounded answer generation, stateful agent orchestration, standardized tool integration, and production-oriented API infrastructure.
+A Python-based scientific literature assistant combining retrieval-augmented generation (RAG), hybrid lexical and semantic retrieval, LLM reranking, grounded answer generation, stateful agent orchestration, standardized tool integration, and production-oriented API infrastructure.
 
-The project includes a deterministic RAG pipeline alongside a LangGraph-based agent capable of dynamically selecting literature retrieval and calculation tools. Tool access can be provided through Model Context Protocol (MCP), while Langfuse tracing provides visibility into agent execution, tool calls, failures, and RAG usage.
+The project includes a deterministic RAG pipeline alongside a LangGraph-based agent capable of dynamically selecting literature retrieval and calculation tools. Retrieval combines dense embedding search with BM25 lexical search using Reciprocal Rank Fusion (RRF). Tool access can be provided through Model Context Protocol (MCP), while Langfuse tracing provides visibility into agent execution, RAG operations, tool calls, and failures.
 
 The application also includes a FastAPI backend, PostgreSQL persistence, usage analytics, Docker containerization, automated testing, GitHub Actions CI, and cloud deployment on Google Cloud Run.
 
@@ -12,12 +12,17 @@ The application also includes a FastAPI backend, PostgreSQL persistence, usage a
 
 - Token-based document chunking
 - OpenAI embeddings
-- Semantic retrieval using normalized vector similarity
+- Dense semantic retrieval using normalized vector similarity
+- BM25 lexical retrieval
+- Hybrid dense + lexical candidate retrieval
+- Reciprocal Rank Fusion (RRF)
 - LLM-based passage reranking
 - Grounded answer generation with structured outputs
 - Citation ID validation
 - Insufficient-evidence handling
 - Source-aware answer generation
+- Retrieval benchmarking using Hit@k and Mean Reciprocal Rank (MRR)
+- Candidate-depth evaluation for reranking quality and cost
 
 ### Agentic Workflow
 
@@ -84,7 +89,7 @@ The application also includes a FastAPI backend, PostgreSQL persistence, usage a
 
 ## Technology Stack
 
-Python, OpenAI API, FastAPI, Pydantic, LangGraph, MCP, Langfuse, NumPy, PostgreSQL, Supabase, psycopg, Docker, pytest, GitHub Actions, Google Cloud Run, Google Secret Manager.
+Python, OpenAI API, FastAPI, Pydantic, LangGraph, MCP, Langfuse, NumPy, rank-bm25, PostgreSQL, Supabase, psycopg, Docker, pytest, GitHub Actions, Google Cloud Run, Google Secret Manager.
 
 ## Quick Start
 
@@ -161,15 +166,21 @@ This creates a local vector index in:
 app/index_v2/climate-demo/
 ```
 
-### 6. Test semantic retrieval
+### 6. Test retrieval
 
 ```bash
 python -m app.retrieval
 ```
 
+The retrieval demo displays results from:
+
+- Dense semantic retrieval
+- BM25 lexical retrieval
+- Hybrid retrieval using Reciprocal Rank Fusion
+
 Example question:
 
-> Which greenhouse gases are mentioned in the document?
+> What were the carbon dioxide concentrations in 2015 and 2025?
 
 ### 7. Run the deterministic RAG assistant
 
@@ -184,6 +195,58 @@ Example questions:
 - What was the global average temperature in 2024?
 
 The final question can be used to test insufficient-evidence handling.
+
+## Hybrid Retrieval
+
+The first-stage retriever combines two complementary retrieval strategies.
+
+### Dense retrieval
+
+The user question is embedded using the same embedding model used to index document chunks. Normalized vector similarity is then used to identify semantically related passages.
+
+Dense retrieval can recover relevant passages even when the query and document use different wording.
+
+### BM25 lexical retrieval
+
+BM25 scores chunks according to lexical overlap while accounting for:
+
+- Query-term frequency
+- Inverse document frequency
+- Term-frequency saturation
+- Document-length normalization
+
+Lexical retrieval is particularly useful for exact identifiers, acronyms, model names, numerical values, and uncommon terminology.
+
+### Reciprocal Rank Fusion
+
+The dense and BM25 rankings are combined using Reciprocal Rank Fusion rather than directly combining their raw scores.
+
+```text
+Question
+   |
+   +--------------------+
+   |                    |
+   v                    v
+Dense Retrieval     BM25 Retrieval
+   |                    |
+   +---------+----------+
+             |
+             v
+    Reciprocal Rank Fusion
+             |
+             v
+      Hybrid Candidate Pool
+             |
+             v
+        LLM Reranker
+             |
+             v
+        Grounded Answer
+```
+
+RRF operates on ranking positions rather than raw retrieval scores, allowing dense cosine similarities and BM25 scores to be combined without requiring score normalization.
+
+The current application uses equal weighting for dense and BM25 retrieval. A development-set experiment with increased BM25 weighting did not improve retrieval quality, so equal-weight fusion was retained.
 
 ## MCP Tool Service
 
@@ -249,7 +312,9 @@ The agent maintains state including:
 - Final answer
 - Tool errors
 
-Important workflow constraints are enforced in application code rather than relying entirely on LLM decisions. For example, when the user explicitly requests a calculation, the agent cannot finish successfully without an explicit calculator result unless the calculator tool has failed.
+Important workflow constraints are enforced in application code rather than relying entirely on LLM decisions.
+
+For example, when a user explicitly requests a calculation, the agent cannot silently bypass the calculator and perform the arithmetic during final synthesis. If the calculator fails, the failure is preserved in agent state and the final answer reports that the requested calculation could not be completed.
 
 ## Run the API
 
@@ -302,7 +367,7 @@ Example request:
 }
 ```
 
-A typical successful result follows:
+A typical successful execution follows:
 
 ```text
 literature -> calculator -> finish
@@ -361,23 +426,33 @@ Scientific Document
         v
 Token-Based Chunking
         |
-        v
-OpenAI Embeddings
-        |
-        v
-Local Vector Index
-        |
-        v
-Semantic Retrieval
-        |
-        v
-LLM Passage Reranking
-        |
-        v
-Grounded Answer Generation
-        |
-        v
-Citation Validation
+        +----------------------+
+        |                      |
+        v                      v
+OpenAI Embeddings         Tokenized Corpus
+        |                      |
+        v                      v
+Local Vector Index        BM25 Index
+        |                      |
+        v                      v
+Dense Retrieval          Lexical Retrieval
+        |                      |
+        +----------+-----------+
+                   |
+                   v
+        Reciprocal Rank Fusion
+                   |
+                   v
+         Hybrid Candidate Pool
+                   |
+                   v
+         LLM Passage Reranking
+                   |
+                   v
+        Grounded Answer Generation
+                   |
+                   v
+          Citation Validation
 ```
 
 ## Observability Architecture
@@ -468,6 +543,8 @@ The primary FastAPI application is containerized and deployed to Google Cloud Ru
 
 The current MCP calculator integration is demonstrated as a separate MCP service. A production deployment would require that MCP service to be deployed and reachable by the agent rather than manually started by the end user.
 
+Langfuse tracing is integrated into the application and can be enabled when Langfuse credentials are provided.
+
 ## Evaluation and Reliability
 
 The project includes:
@@ -482,7 +559,8 @@ The project includes:
 - Unknown-action fallback tests
 - Insufficient-evidence tests
 - Mocked LLM responses for deterministic testing
-- Retrieval and agent evaluation scripts
+- Retrieval evaluation scripts
+- Candidate-depth evaluation
 - Structured error handling
 - Upstream API failure handling
 - Request latency tracking
@@ -496,7 +574,146 @@ The project includes:
 - Docker API health-check smoke testing
 - Temporary PostgreSQL services during CI
 
-The tests verify agent behavior without requiring real OpenAI or MCP calls during CI.
+The automated test suite verifies application and agent behavior without requiring real OpenAI or MCP calls during CI.
+
+## Retrieval Evaluation
+
+The repository includes a synthetic retrieval benchmark with 52 passages and 29 questions.
+
+The benchmark deliberately includes:
+
+- Semantically similar distractors
+- Near-duplicate concepts
+- Exact identifiers
+- Numerical values
+- Related model names
+- Scientific terminology
+- Queries that favor semantic matching
+- Queries that favor lexical matching
+
+Dense retrieval, BM25, and hybrid RRF retrieval were compared using Hit@k and Mean Reciprocal Rank (MRR).
+
+### Full 29-case benchmark
+
+| Retriever | Hit@1 | Hit@3 | Hit@5 | MRR |
+| --- | ---: | ---: | ---: | ---: |
+| Dense | 0.828 | 1.000 | 1.000 | 0.908 |
+| BM25 | 0.862 | 1.000 | 1.000 | 0.931 |
+| Hybrid RRF | 0.828 | 1.000 | 1.000 | 0.914 |
+
+The benchmark shows complementary behavior between semantic and lexical retrieval.
+
+Some queries are ranked better by BM25, especially cases involving exact identifiers or closely related alternatives. Other queries are ranked better by dense retrieval when semantic similarity is more important than exact word overlap.
+
+Hybrid RRF preserves both signals in a common candidate-ranking pipeline.
+
+### Weighted RRF Evaluation
+
+The evaluation cases were also split reproducibly into a development set and held-out test set.
+
+BM25 fusion weights of:
+
+```text
+1.00
+1.10
+1.25
+1.50
+```
+
+were evaluated while keeping the dense weight fixed at `1.0`.
+
+Increasing the BM25 contribution did not improve development performance:
+
+| Dense Weight | BM25 Weight | Dev Hit@1 | Dev MRR |
+| ---: | ---: | ---: | ---: |
+| 1.0 | 1.0 | 0.800 | 0.900 |
+| 1.0 | 1.1 | 0.750 | 0.875 |
+| 1.0 | 1.25 | 0.750 | 0.875 |
+| 1.0 | 1.5 | 0.750 | 0.875 |
+
+Equal-weight RRF was therefore retained.
+
+On the nine held-out queries:
+
+| Retriever | Hit@1 | Hit@3 | Hit@5 | MRR |
+| --- | ---: | ---: | ---: | ---: |
+| Dense | 0.889 | 1.000 | 1.000 | 0.944 |
+| BM25 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Hybrid RRF | 0.889 | 1.000 | 1.000 | 0.944 |
+
+Because this is a small synthetic benchmark, these results are treated as diagnostic evidence rather than proof that one retrieval method is universally superior.
+
+## Candidate-Depth Evaluation
+
+The LLM reranker was evaluated using hybrid candidate pools of:
+
+```text
+candidate_k = 3
+candidate_k = 5
+candidate_k = 10
+candidate_k = 20
+```
+
+On the 20-query development split, all four configurations achieved:
+
+```text
+Hit@3 = 1.000
+MRR   = 1.000
+```
+
+Average reranking cost increased as the candidate pool grew:
+
+| candidate_k | Hit@3 | MRR | Avg Input Tokens | Avg Est. Cost |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 | 1.000 | 1.000 | 325.0 | $0.000433 |
+| 5 | 1.000 | 1.000 | 433.8 | $0.000506 |
+| 10 | 1.000 | 1.000 | 700.7 | $0.000704 |
+| 20 | 1.000 | 1.000 | 1238.1 | $0.001111 |
+
+The smallest candidate pool was therefore selected by the development-set optimization rule.
+
+On the nine-query held-out split, `candidate_k=3` and `candidate_k=20` both preserved:
+
+```text
+Hit@3 = 1.000
+MRR   = 1.000
+```
+
+while `candidate_k=3` reduced:
+
+- Reranker input tokens by **73.6%**
+- Estimated reranking cost by **60.8%**
+
+However, the application retains a conservative production default of `candidate_k=20`.
+
+Earlier experiments on full scientific papers showed that small semantic-retrieval candidate pools could miss relevant evidence. Because the current candidate-depth benchmark uses short synthetic passages, the observed efficiency improvement is not assumed to generalize to long, heterogeneous scientific documents.
+
+A future real-document benchmark can determine whether hybrid retrieval allows the production candidate pool to be reduced safely.
+
+## Running Retrieval Evaluation
+
+Build the synthetic retrieval evaluation index:
+
+```powershell
+python -m app.indexing `
+  --source evals/retrieval_corpus.json `
+  --index evals/retrieval_index `
+  --paper-id retrieval-eval
+```
+
+Run the retrieval benchmark:
+
+```bash
+python -m evals.retrieval_eval
+```
+
+Run the reranker candidate-depth experiment:
+
+```bash
+python -m evals.candidate_k_eval
+```
+
+The generated evaluation index is not intended to be committed to source control.
 
 ## Continuous Integration
 
@@ -521,9 +738,10 @@ The deployed system uses:
 - Google Secret Manager for runtime credentials
 - Supabase PostgreSQL for persistent application data
 - OpenAI API for embeddings, reranking, planning, and generation
-- Langfuse Cloud for agent observability and tracing
 
 The application does not rely on local SQLite persistence, so request history and analytics survive Cloud Run container restarts and revisions.
+
+Langfuse can be configured separately for tracing and agent observability.
 
 ## Design Principles
 
@@ -557,36 +775,44 @@ Core retrieval, reranking, grounding, validation, and calculation functionality 
 
 LangGraph is used for higher-level stateful agent orchestration, while MCP provides a standardized tool interface.
 
+### Evaluation before optimization
+
+Retrieval and reranking parameters are changed only after measuring their effect on quality, token usage, cost, and latency.
+
+Synthetic benchmarks are treated as controlled experiments rather than substitutes for evaluation on realistic scientific-document collections.
+
 ## Limitations
 
 This project is a production-oriented portfolio system rather than a large-scale commercial deployment.
 
-- The example corpus is small and synthetic.
+- The demonstration corpus is small and synthetic.
 - Real LLM requests require API credentials and incur API costs.
-- The vector index must currently be built before retrieval.
+- Document indexes must currently be built before retrieval.
 - Automated API tests mock external LLM calls.
-- Retrieval quality on large heterogeneous document collections has not yet been established by the demonstration corpus.
-- Retrieval currently uses dense semantic search rather than hybrid lexical and semantic retrieval.
+- Retrieval uses hybrid dense semantic search and BM25 lexical search with Reciprocal Rank Fusion.
+- The current retrieval benchmark is synthetic and relatively small.
+- Retrieval quality has not yet been systematically evaluated on a large heterogeneous collection of full scientific papers.
+- Candidate-depth optimization has not yet been validated on a larger real-document corpus.
+- The production reranker therefore retains a conservative candidate pool of 20 passages.
 - The vector index is currently local rather than backed by a managed vector database.
 - The MCP calculator is deliberately simple and is primarily used to demonstrate MCP architecture.
 - The MCP service is not yet independently deployed as part of the cloud architecture.
 - The current cloud deployment is intentionally small-scale.
 - Authentication and user-level authorization are not yet implemented.
-- Agent evaluation is currently limited compared with a production evaluation framework.
+- Agent evaluation remains limited compared with a production evaluation framework.
 
-## Planned Improvements
+## Future Improvements
 
-Planned next steps include:
+Potential future extensions include:
 
-- Hybrid lexical + semantic retrieval
-- BM25 retrieval and Reciprocal Rank Fusion
-- Retrieval benchmarking against semantic-only search
-- More formal RAG and agent evaluation
-- More meaningful MCP-backed external tools
+- Retrieval and candidate-depth evaluation on larger collections of full scientific papers
+- More formal end-to-end RAG and agent evaluation
+- More substantial MCP-backed external tools
 - Independent cloud deployment of MCP services
+- Managed vector storage for larger document collections
+- Authentication and user-level authorization
 - Stronger deployment automation
 - Production monitoring and alerting
-- Authentication and authorization
 - Evaluation-driven agent regression testing
 
 ## Author

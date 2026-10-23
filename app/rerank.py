@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel, Field
-from app.retrieval import search, client
+from app.retrieval import hybrid_search, client
 
 import time
 
@@ -79,7 +79,12 @@ def search_with_reranking(
 ):
     retrieval_start = time.perf_counter()
 
-    candidates = search(question, k=candidate_k,)
+    candidates = hybrid_search(
+        question,
+        k=candidate_k,
+        dense_k=candidate_k,
+        bm25_k=candidate_k,
+    )
 
     retrieval_seconds = time.perf_counter() - retrieval_start
 

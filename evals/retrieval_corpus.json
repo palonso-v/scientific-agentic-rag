@@ -1,0 +1,210 @@
+[
+  {
+    "page": 1,
+    "text": "During the synthetic atmospheric campaign, instrument AX-41 measured aerosol optical depth at 550 nanometers. The reported value was 0.18."
+  },
+  {
+    "page": 2,
+    "text": "Instrument AX-14 was used in a separate aerosol-monitoring experiment. At 550 nanometers, AX-14 reported an aerosol optical depth of 0.21."
+  },
+  {
+    "page": 3,
+    "text": "The AX-41 atmospheric instrument requires periodic calibration using reference filters. Calibration corrects detector drift but does not itself provide an aerosol optical depth measurement."
+  },
+  {
+    "page": 4,
+    "text": "The AX-410 sensor is a later member of the AX instrument family. During a synthetic test it measured aerosol optical depth of 0.16 at 550 nanometers."
+  },
+  {
+    "page": 5,
+    "text": "The AX-41B prototype recorded an aerosol optical depth of 0.19 during laboratory validation. Its optical configuration differs slightly from the original AX-41."
+  },
+  {
+    "page": 6,
+    "text": "Dynamic Graph CNN, or DGCNN, performs point-cloud learning with EdgeConv layers. Neighborhood graphs are recomputed dynamically in feature space as the network processes the point cloud."
+  },
+  {
+    "page": 7,
+    "text": "PointNet++ extends PointNet through hierarchical sampling and grouping. Local neighborhoods are aggregated at increasingly large spatial scales."
+  },
+  {
+    "page": 8,
+    "text": "PointNet applies shared multilayer perceptrons independently to individual points and obtains a global representation through a symmetric max-pooling operation."
+  },
+  {
+    "page": 9,
+    "text": "Graph Attention Networks operate on graph-structured data by assigning learned attention weights to neighboring nodes. The graph structure is normally provided rather than reconstructed dynamically after each feature transformation."
+  },
+  {
+    "page": 10,
+    "text": "GeoCD is a geometry-aware distance for point clouds. Instead of relying purely on ambient Euclidean proximity, it approximates intrinsic geodesic structure using propagation over local neighborhoods."
+  },
+  {
+    "page": 11,
+    "text": "Chamfer distance compares two point sets using nearest-neighbor distances in both directions. Standard Chamfer distance measures proximity in ambient Euclidean space."
+  },
+  {
+    "page": 12,
+    "text": "Earth Mover's Distance measures the minimum transport cost needed to transform one point distribution into another. It captures global assignment structure but is computationally more expensive than Chamfer distance."
+  },
+  {
+    "page": 13,
+    "text": "ModelNet40-E is an uncertainty-aware benchmark for point-cloud classification. It introduces LiDAR-inspired corruptions and supports evaluation of robustness, calibration, uncertainty estimation, and error detection."
+  },
+  {
+    "page": 14,
+    "text": "ModelNet40 is a collection of synthetic CAD models commonly used for three-dimensional object classification. The traditional benchmark primarily evaluates classification accuracy."
+  },
+  {
+    "page": 15,
+    "text": "ScanObjectNN contains real scanned objects and is often used to evaluate point-cloud models under more realistic sensing conditions than synthetic CAD datasets."
+  },
+  {
+    "page": 16,
+    "text": "CRISPR-Cas9 uses a guide RNA to direct the Cas9 nuclease toward a complementary DNA sequence. Cas9 creates a targeted DNA break that can be used for genome editing."
+  },
+  {
+    "page": 17,
+    "text": "Base editing is derived from CRISPR technology but can change selected DNA bases without producing a conventional double-strand DNA break."
+  },
+  {
+    "page": 18,
+    "text": "Prime editing combines a modified Cas9 protein with a reverse transcriptase and a specialized guide RNA. It can write new genetic information without requiring the same double-strand break used by standard CRISPR-Cas9."
+  },
+  {
+    "page": 19,
+    "text": "NIRCam is the Near Infrared Camera aboard the James Webb Space Telescope. It provides imaging at near-infrared wavelengths and supports observations of galaxies, stars, and exoplanets."
+  },
+  {
+    "page": 20,
+    "text": "NIRSpec is the Near Infrared Spectrograph aboard the James Webb Space Telescope. It separates incoming near-infrared light into spectra rather than primarily producing direct images."
+  },
+  {
+    "page": 21,
+    "text": "MIRI is the Mid-Infrared Instrument aboard the James Webb Space Telescope. It provides both imaging and spectroscopic capabilities at longer infrared wavelengths than NIRCam and NIRSpec."
+  },
+  {
+    "page": 22,
+    "text": "The transit method detects exoplanets by measuring recurring decreases in stellar brightness when a planet crosses the visible disk of its host star."
+  },
+  {
+    "page": 23,
+    "text": "The radial-velocity method searches for periodic shifts in stellar spectral lines caused by the gravitational influence of an orbiting planet on its host star."
+  },
+  {
+    "page": 24,
+    "text": "Gravitational microlensing can reveal planets when a foreground planetary system temporarily magnifies the light of a more distant background star."
+  },
+  {
+    "page": 25,
+    "text": "The synthetic catalyst ZK-91 reduces the activation-energy barrier of chemical reaction R17. In the test experiment it increased the reaction rate without being consumed."
+  },
+  {
+    "page": 26,
+    "text": "Catalyst ZK-19 was evaluated for reaction R17 but produced only a small change in reaction rate. It was not the catalyst associated with the large reduction in activation energy."
+  },
+  {
+    "page": 27,
+    "text": "Catalyst ZK-91 was also tested on reaction R71. In that experiment its effect was weak and the reaction kinetics remained nearly unchanged."
+  },
+  {
+    "page": 28,
+    "text": "Principal component analysis reduces dimensionality by projecting observations onto orthogonal directions ordered according to the amount of variance they explain."
+  },
+  {
+    "page": 29,
+    "text": "t-SNE is a nonlinear dimensionality-reduction technique designed primarily for visualization. It attempts to preserve local neighborhood relationships in a low-dimensional embedding."
+  },
+  {
+    "page": 30,
+    "text": "UMAP constructs a graph representation of local relationships in high-dimensional data and optimizes a low-dimensional embedding that approximately preserves this structure."
+  },
+  {
+    "page": 31,
+    "text": "BERT learns bidirectional contextual representations with a transformer encoder. Its original pretraining objective includes masked language modeling, where hidden tokens are predicted using information from both surrounding directions."
+  },
+  {
+    "page": 32,
+    "text": "GPT-style language models are autoregressive transformers. They predict subsequent tokens from preceding context rather than using the bidirectional masked-token objective associated with BERT."
+  },
+  {
+    "page": 33,
+    "text": "T5 treats many natural-language tasks as text-to-text problems. Its encoder-decoder transformer is pretrained using corrupted text spans that must be reconstructed."
+  },
+  {
+    "page": 34,
+    "text": "Retrieval-augmented generation retrieves external evidence before producing an answer. Retrieved passages are supplied to the language model so that generation can be grounded in information outside the model parameters."
+  },
+  {
+    "page": 35,
+    "text": "BM25 is a lexical information-retrieval method. Its scoring function combines term occurrence, inverse document frequency, term-frequency saturation, and document-length normalization."
+  },
+  {
+    "page": 36,
+    "text": "Reciprocal Rank Fusion combines multiple ranked result lists without requiring the original retrieval scores to share a common scale. Each document receives contributions determined by its position in each ranking."
+  },
+  {
+    "page": 37,
+    "text": "Dense retrieval maps queries and documents into vector representations. Similarity between those representations allows semantically related passages to be retrieved even when they do not share exactly the same vocabulary."
+  },
+  {
+    "page": 38,
+    "text": "Type Ia supernovae can be standardized using correlations in their light curves. Their inferred luminosities allow astronomers to estimate cosmological distances from observed brightness."
+  },
+  {
+    "page": 39,
+    "text": "Cepheid variable stars exhibit a relationship between pulsation period and intrinsic luminosity. This relation makes them important distance indicators within relatively nearby astronomical systems."
+  },
+  {
+    "page": 40,
+    "text": "Baryon acoustic oscillations provide a characteristic clustering scale that can be used as a standard ruler for studies of cosmic expansion."
+  },
+  {
+    "page": 41,
+    "text": "The LIGO observatories measure gravitational waves using kilometer-scale laser interferometers. A passing gravitational wave produces extremely small changes in the relative lengths of perpendicular interferometer arms."
+  },
+  {
+    "page": 42,
+    "text": "Pulsar timing arrays search for very low-frequency gravitational waves by monitoring correlated changes in the arrival times of radio pulses from many millisecond pulsars."
+  },
+  {
+    "page": 43,
+    "text": "Photosynthesis converts light energy into chemical energy. Chlorophyll absorbs radiation while carbon dioxide and water provide material used to synthesize carbohydrates."
+  },
+  {
+    "page": 44,
+    "text": "Chemosynthesis produces organic compounds using energy released by chemical reactions rather than sunlight. Some microorganisms use this process in deep-ocean environments."
+  },
+  {
+    "page": 45,
+    "text": "Methane absorbs infrared radiation and contributes to the greenhouse effect. Although its atmospheric concentration is much lower than that of carbon dioxide, it is an important greenhouse gas."
+  },
+  {
+    "page": 46,
+    "text": "In a synthetic climate dataset, an imaginary monitoring station recorded annual average carbon dioxide concentrations of 400 ppm in 2015 and 420 ppm in 2025."
+  },
+  {
+    "page": 47,
+    "text": "The SARS-CoV-2 spike protein binds the ACE2 receptor on host cells and plays an important role in viral entry."
+  },
+  {
+    "page": 48,
+    "text": "Influenza viruses use hemagglutinin to bind sialic-acid-containing receptors on host cells. This surface protein contributes to viral attachment and entry."
+  },
+  {
+    "page": 49,
+    "text": "The Adam optimizer maintains exponentially decaying estimates of first and second moments of the gradient and uses them to adapt the learning rate for individual parameters."
+  },
+  {
+    "page": 50,
+    "text": "Stochastic gradient descent updates model parameters using gradients computed from minibatches. Momentum can be added to smooth updates and accelerate optimization along persistent descent directions."
+  },
+  {
+    "page": 51,
+    "text": "Dropout is a regularization method that randomly disables a subset of neural-network activations during training. This reduces reliance on particular feature combinations and can improve generalization."
+  },
+  {
+    "page": 52,
+    "text": "Batch normalization normalizes intermediate activations using minibatch statistics during training and maintains running statistics for use during inference."
+  }
+]

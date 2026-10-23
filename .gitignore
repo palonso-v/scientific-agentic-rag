@@ -47,3 +47,6 @@ Thumbs.db
 # Generated document indexes
 app/index/
 app/index_v2/
+
+# Generated evaluation indexes
+evals/retrieval_index/
